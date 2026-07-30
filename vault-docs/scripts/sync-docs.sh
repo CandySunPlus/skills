@@ -9,9 +9,10 @@
 #   - 镜像被手工改了  -> 先备份再覆盖，并在报告中列出
 # 该基线同时被 check-docs-mirror.sh 用于提交前与 CI 的校验。
 #
-# 所有取值都在仓库根的 .mirror.conf：镜像装在哪、vault 在哪、横幅模板。
-# 同名环境变量可以临时覆盖 MIRROR_VAULT_ROOT 与 MIRROR_VAULT_DOCS——换台机器、
-# 或者临时指向另一个 vault 时不必改配置。
+# 仓库侧的取值在仓库根的 .mirror.conf（入 Git）：镜像装在哪、vault 的哪个子目录是
+# 源、横幅模板。vault 根目录是本机路径，在 .mirror.conf.local（不入 Git）。
+# 同名环境变量可以临时覆盖 MIRROR_VAULT_ROOT 与 MIRROR_VAULT_DOCS——临时指向另一个
+# vault 时连本机配置都不必动。
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -28,8 +29,12 @@ if [[ -z "$VAULT_DOCS" ]]; then
     cat >&2 <<EOF
 未配置 Obsidian vault 位置。
 
-在 $CONF 里设 MIRROR_VAULT_ROOT（vault 根目录），需要的话再设
-MIRROR_VAULT_SUBPATH（vault 里哪个子目录是源）。
+在 ${LOCAL_CONF} 里设 MIRROR_VAULT_ROOT，指向你这台机器上的 vault 根目录：
+
+    echo 'MIRROR_VAULT_ROOT=/path/to/vault' > ${LOCAL_CONF}
+
+这份文件不入 Git，每人一份。vault 里哪个子目录是源由 .mirror.conf 的
+MIRROR_VAULT_SUBPATH 定，那是全项目一致的值，不在这儿改。
 
 或临时用环境变量：
 
@@ -41,9 +46,10 @@ fi
 
 if [[ ! -d "$VAULT_DOCS" ]]; then
   echo "vault 里的源目录不存在：$VAULT_DOCS" >&2
-  echo "检查 $CONF 里的 MIRROR_VAULT_ROOT 与 MIRROR_VAULT_SUBPATH——" >&2
+  echo "检查 ${LOCAL_CONF} 里的 MIRROR_VAULT_ROOT（你这台机器上的 vault 根目录），" >&2
+  echo "以及 $CONF 里的 MIRROR_VAULT_SUBPATH（vault 里哪个子目录是源）——" >&2
   echo "或者你这次用了 MIRROR_VAULT_ROOT / MIRROR_VAULT_DOCS 环境变量覆盖它们。" >&2
-  echo "配置入 Git，所以换台机器时里面的绝对路径多半要改。" >&2
+  echo "vault 侧的目录改了名，两处都要跟着改：SUBPATH 全项目共用，ROOT 只你自己用。" >&2
   exit 1
 fi
 

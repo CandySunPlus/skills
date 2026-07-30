@@ -28,6 +28,35 @@ _env_vault_docs="${MIRROR_VAULT_DOCS:-}"
 # shellcheck disable=SC1090
 source "$CONF"
 
+# 本机取值：vault 在哪。这份文件不入 Git，所以每人一份、换台机器不必动共享配置。
+# CI 里它不存在，而 CI 也不需要它——校验只比对镜像与基线，从不访问 vault。
+LOCAL_CONF="$REPO_ROOT/.mirror.conf.local"
+if [[ -f "$LOCAL_CONF" ]]; then
+  # 仓库侧的键只许在 .mirror.conf 里定。放开的后果是本机同步产出的镜像与 CI 读的
+  # 那份配置不再是一回事，而症状是校验报一堆「多出文件 / 文件缺失」——根因藏在一个
+  # 不入 Git 的文件里，看报错找不出来。所以这儿比对前后，改了就当场停。
+  _repo_keys=(
+    MIRROR_DEST MIRROR_VAULT_SUBPATH MIRROR_TYPES MIRROR_BANNER
+    MIRROR_MANIFEST MIRROR_BACKUP_PREFIX MIRROR_EXCLUDES
+  )
+  _before="$(declare -p "${_repo_keys[@]}" 2>/dev/null || true)"
+  # shellcheck disable=SC1090
+  source "$LOCAL_CONF"
+  _after="$(declare -p "${_repo_keys[@]}" 2>/dev/null || true)"
+  if [[ "$_before" != "$_after" ]]; then
+    cat >&2 <<EOF
+${LOCAL_CONF} 动了仓库侧的取值。
+
+这份文件只放 MIRROR_VAULT_ROOT，vault 布局与别人不同时再加 MIRROR_VAULT_DOCS。
+其余键决定哪些文件算镜像内容，全项目必须一致，只在 .mirror.conf 里定：
+
+  ${_repo_keys[*]}
+EOF
+    exit 1
+  fi
+  unset _repo_keys _before _after
+fi
+
 if [[ -n "$_env_vault_root" ]]; then
   MIRROR_VAULT_ROOT="$_env_vault_root"
 fi

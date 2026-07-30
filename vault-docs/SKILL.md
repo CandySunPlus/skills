@@ -18,7 +18,8 @@ description: Use when 要读或改由 Obsidian vault 单向同步进仓库的只
 | `sync-docs.sh` | vault → 仓库单向同步（`rsync --delete`）、注入只读横幅、检测并备份手改、改写 wikilink、写基线 |
 | `check-docs-mirror.sh` | 校验镜像与基线一致。**不碰 vault**，所以 CI 也能跑 |
 | `<镜像>.manifest` | 基线，每个文件的 sha256，随仓库提交 |
-| `.mirror.conf` | 全部取值：镜像装哪、vault 在哪、收哪些扩展名、排除什么、横幅模板 |
+| `.mirror.conf` | 仓库侧取值，入 Git：镜像装哪、vault 的哪个子目录是源、收哪些扩展名、排除什么、横幅模板 |
+| `.mirror.conf.local` | 本机取值，不入 Git：`MIRROR_VAULT_ROOT`（vault 在这台机器的哪儿）。CI 里没有也不需要 |
 
 基线是这套机制的关键：**光比对内容分不清「vault 更新了」还是「镜像被改了」**——两种情况都表现为镜像与 vault 不一致。有了上次同步的基线才能判定，而且校验从此不需要访问 vault。
 
@@ -40,7 +41,7 @@ description: Use when 要读或改由 Obsidian vault 单向同步进仓库的只
 
 ## 改文档
 
-只在 vault 里改。vault 位置在 `.mirror.conf` 的 `MIRROR_VAULT_ROOT`（同名环境变量可临时覆盖）。改完跑：
+只在 vault 里改。vault 位置在 `.mirror.conf.local` 的 `MIRROR_VAULT_ROOT`（同名环境变量可临时覆盖）；没有这份文件时 `sync-docs.sh` 会报出来并给出该写什么。多人协作怎么摆见 `安装.md`——**各自复制一份 vault 会互删**。改完跑：
 
 ```bash
 ./scripts/sync-docs.sh              # 同步并重写基线

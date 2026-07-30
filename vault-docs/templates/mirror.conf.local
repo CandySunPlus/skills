@@ -1,0 +1,17 @@
+# 只读镜像机制的本机取值：vault 在你这台机器上的哪儿。
+# 放在仓库根，命名 .mirror.conf.local，**不入 Git**（.gitignore 里要有一条）。
+#
+# 每人一份，所以协作者不必为了自己的 vault 路径去改共享的 .mirror.conf。
+# CI 里没有这份文件，也不需要——校验只比对镜像与基线，从不访问 vault。
+#
+# 只放下面这两项。写进仓库侧的键（MIRROR_DEST、MIRROR_VAULT_SUBPATH、MIRROR_TYPES
+# 之类）会被 mirror-common.sh 当场拒掉：那些值决定哪些文件算镜像内容，必须全项目
+# 一致，只在 .mirror.conf 里定。
+
+# vault 根目录，绝对路径。
+MIRROR_VAULT_ROOT=/Users/you/Documents/vault
+
+# 源目录的完整路径。给了它就不看上面那个根、也不看 .mirror.conf 的
+# MIRROR_VAULT_SUBPATH。留给「你的 vault 布局与别人不同」或者「源根本不在 vault
+# 之下」这两种情形，一般不用。
+# MIRROR_VAULT_DOCS=
