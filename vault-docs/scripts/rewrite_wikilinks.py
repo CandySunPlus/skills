@@ -5,6 +5,10 @@ vault 里跨文引用写作 [[某文档]]，只有 Obsidian 认这套语法。�
 GitHub 与各类编辑器都把它当普通文字，跨文引用全部点不动——而镜像存在的意义
 恰恰是让代码和编码代理在仓库内直接读这些文档。
 
+[[某文档#某小节]] 里的锚点也一并译过去：读目标文件的标题，按 GitHub 给标题
+生成锚点的规则算出 slug，拼进链接。译不出来的（块引用 #^块号、对不上任何标题的）
+留成文件级链接并在报告里列出，不静默指错。
+
 由 sync-docs.sh 在注入只读横幅之后、写基线之前调用。位置在写基线之前，改写
 结果才能成为基线的一部分，校验那套机制不必知道它存在。
 
@@ -17,12 +21,22 @@ from __future__ import annotations
 
 import re
 import sys
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 
 FENCE_RE = re.compile(r"^ {0,3}(`{3,}|~{3,})([^\n]*)")
 BACKTICK_RUN_RE = re.compile(r"`+")
 BLANK_LINE_RE = re.compile(r"\n[ \t]*\n")
+
+# ATX 标题。要求 # 之后有空白，否则 #标签 会被当成标题。
+ATX_RE = re.compile(r"^ {0,3}#{1,6}(?:[ \t]+(.*?))?[ \t]*$")
+# 闭合式标题末尾那串 #（`## 标题 ##`）。前面必须是空白，不然 `# C#` 会被削成 `C`。
+CLOSING_HASHES_RE = re.compile(r"(?:\A|[ \t])#+\Z")
+# YAML frontmatter。里面以 # 开头的行是 YAML 注释，不是标题。
+FRONTMATTER_RE = re.compile(r"\A---[ \t]*\n.*?\n---[ \t]*(?:\n|\Z)", re.DOTALL)
+# 标题里的行内链接，取其显示文字——GitHub 的锚点按渲染后的文字算。
+INLINE_LINK_RE = re.compile(r"!?\[([^\]]*)\]\([^)]*\)")
 
 # 目标不含 [ ] | # 与反斜杠，锚点与别名各自可选。![[...]] 的叹号单独捕获。
 # 别名分隔符允许前置反斜杠——表格单元格里的 wikilink 必须写 \| ，裸竖线会把单元格切开。
@@ -112,6 +126,79 @@ def code_spans(text: str) -> list[tuple[int, int]]:
     return sorted(fences + _inline_spans(text, fences))
 
 
+# slug 里保留的两个标点。GitHub 删掉其余标点与符号，只留下这两个。
+_SLUG_KEEP = frozenset("-_")
+
+
+def github_slug(title: str) -> str:
+    """标题文本 -> GitHub 给它生成的锚点。
+
+    规则三步：转小写、删掉标点与符号（`-` 与 `_` 留着）、空格换成连字符。
+    中文不受影响，所以「4. WebSocket 控制协议」出来是 4-websocket-控制协议。
+    """
+    chars = []
+    for char in title.lower():
+        if char == " ":
+            chars.append("-")
+        elif char in _SLUG_KEEP or unicodedata.category(char)[0] not in "PSCZ":
+            chars.append(char)
+    return "".join(chars)
+
+
+def _heading_text(raw: str) -> str:
+    """标题行里 # 之后那部分的渲染文字。
+
+    行内链接取显示文字：GitHub 按渲染结果算锚点，而 [[目标|别名]] 在镜像里会被
+    改写成 [别名](路径)，两种形态渲染出来是同一串字，所以这儿算一次就够。
+    """
+    title = CLOSING_HASHES_RE.sub("", raw).strip()
+    title = WIKILINK_RE.sub(
+        lambda m: m.group(4) or (m.group(2) + (m.group(3) or "")), title
+    )
+    return INLINE_LINK_RE.sub(r"\1", title).strip()
+
+
+def heading_anchors(text: str) -> dict[str, str]:
+    """一个文档的「标题文本 -> 锚点」。键是转小写后的标题，Obsidian 认锚点不分大小写。
+
+    同名标题只登记第一处，Obsidian 跳的也是第一处；但重名计数要照所有标题走一遍，
+    因为 GitHub 给第二个同名标题的锚点是 slug-1、第三个是 slug-2，漏数一个后面全错。
+    """
+    fences = _mask(text, _fence_spans(text))
+    frontmatter = FRONTMATTER_RE.match(text)
+    body_at = frontmatter.end() if frontmatter else 0
+    anchors: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    pos = 0
+    for line in text.splitlines(keepends=True):
+        start, pos = pos, pos + len(line)
+        if start < body_at or fences[start]:
+            continue
+        match = ATX_RE.match(line.rstrip("\n"))
+        if match is None:
+            continue
+        title = _heading_text(match.group(1) or "")
+        base = github_slug(title)
+        if not base:
+            continue
+        count = seen.get(base, 0)
+        seen[base] = count + 1
+        anchors.setdefault(title.lower(), base if count == 0 else f"{base}-{count}")
+    return anchors
+
+
+def resolve_anchor(anchors: dict[str, str], anchor: str) -> str | None:
+    """Obsidian 的 #小节 -> 镜像里的锚点。译不出来返回 None。
+
+    嵌套写法 #上级#下级 取最后一段，那才是真正指的标题。
+    块引用 #^块号 在 GitHub 上没有对应的锚点，只能落回文件级链接。
+    """
+    title = anchor.lstrip("#").split("#")[-1].strip()
+    if not title or title.startswith("^"):
+        return None
+    return anchors.get(title.lower())
+
+
 def build_index(root: Path) -> dict[str, Path]:
     """wikilink 目标 -> 镜像内的实际文件。
 
@@ -140,7 +227,8 @@ class Report:
     rewritten: int = 0
     in_code: list[str] = field(default_factory=list)
     external: dict[str, int] = field(default_factory=dict)
-    anchored: list[str] = field(default_factory=list)
+    anchored: int = 0
+    anchor_missed: list[str] = field(default_factory=list)
     embeds: list[str] = field(default_factory=list)
     unparsed: list[str] = field(default_factory=list)
     generated: list[tuple[Path, str]] = field(default_factory=list)
@@ -159,8 +247,12 @@ class Report:
             lines.append(f"  代码内跳过 {len(self.in_code)} 处：")
             lines += [f"    {item}" for item in self.in_code]
         if self.anchored:
-            lines.append(f"  带锚点 {len(self.anchored)} 处，锚点未进链接：")
-            lines += [f"    {item}" for item in self.anchored]
+            lines.append(f"  其中带锚点 {self.anchored} 处，锚点已译成 GitHub 的写法")
+        if self.anchor_missed:
+            lines.append(
+                f"  锚点译不出来 {len(self.anchor_missed)} 处，链接落在文件顶部："
+            )
+            lines += [f"    {item}" for item in self.anchor_missed]
         if self.embeds:
             lines.append(f"  嵌入语法 {len(self.embeds)} 处，原样保留：")
             lines += [f"    {item}" for item in self.embeds]
@@ -186,12 +278,18 @@ def rewrite_text(
     root: Path,
     index: dict[str, Path],
     report: Report,
+    anchors: dict[Path, dict[str, str]] | None = None,
 ) -> str:
     """改写单个文件的正文。source 是该文件的绝对路径，root 是镜像根。
 
     命中索引的改成相对链接；未命中的原样保留 [[...]]——仓库里没有可指的文件，
     保留原形态读者一眼看得出这是 vault 笔记，比造个死链或悄悄抹成纯文本诚实。
+
+    anchors 是「目标文件 -> 它的标题锚点表」的缓存，按需填；跨文件复用它，同一个
+    被大量引用的文档才不会被反复读、反复扫标题。
     """
+    if anchors is None:
+        anchors = {}
     in_code = _mask(text, code_spans(text))
     pieces: list[str] = []
     last = 0
@@ -212,10 +310,19 @@ def rewrite_text(
         if dest is None:
             report.external[target] = report.external.get(target, 0) + 1
             continue
-        if anchor:
-            report.anchored.append(f"{where} {match.group(0)}")
-        display = alias if alias else target + anchor
         href = encode_path(dest.relative_to(source.parent, walk_up=True).as_posix())
+        if anchor:
+            if dest not in anchors:
+                # 目标文件此刻可能还没被本轮改写。标题不受改写影响：[[目标|别名]]
+                # 会变成 [别名](路径)，渲染出来是同一串字，锚点算的就是那串字。
+                anchors[dest] = heading_anchors(dest.read_text(encoding="utf-8"))
+            slug = resolve_anchor(anchors[dest], anchor)
+            if slug is None:
+                report.anchor_missed.append(f"{where} {match.group(0)}")
+            else:
+                href += f"#{slug}"
+                report.anchored += 1
+        display = alias if alias else target + anchor
         pieces.append(text[last : match.start()])
         pieces.append(f"[{display}]({href})")
         last = match.end()
@@ -243,7 +350,8 @@ def verify_generated(pairs: list[tuple[Path, str]]) -> list[str]:
     """
     broken: list[str] = []
     for source, href in pairs:
-        target = source.parent / decode_path(href)
+        # 锚点由目标文件自己的标题算出来，不必再验；这儿只看路径那一段。
+        target = source.parent / decode_path(href.split("#", 1)[0])
         if not target.exists():
             broken.append(f"{source}: {href} → {target}")
     return broken
@@ -253,9 +361,10 @@ def rewrite_tree(root: Path) -> Report:
     """原地改写整个镜像。返回汇总账目。"""
     index = build_index(root)
     report = Report()
+    anchors: dict[Path, dict[str, str]] = {}
     for path in sorted(root.rglob("*.md")):
         text = path.read_text(encoding="utf-8")
-        rewritten = rewrite_text(text, path, root, index, report)
+        rewritten = rewrite_text(text, path, root, index, report, anchors)
         if rewritten != text:
             path.write_text(rewritten, encoding="utf-8")
     return report
