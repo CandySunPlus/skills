@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# 拦住对只读镜像的手工修改。装到 .githooks/pre-commit。
+#
+# 启用（每人每个克隆执行一次，git 不会分发 hook）：
+#     git config core.hooksPath .githooks
+#
+# hook 不随 clone 分发，所以 CI 也要跑同一个校验脚本兜底。
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+
+# 只为拿 MIRROR_DEST。校验本身交给 check-docs-mirror.sh，那儿才是唯一出处。
+# shellcheck disable=SC1091
+source "$REPO_ROOT/.mirror.conf"
+
+# 只在本次提交触及镜像时才校验，避免拖慢无关提交。
+# 前缀匹配同时覆盖基线文件（它叫 <镜像目录>.manifest）。
+if git diff --cached --name-only --diff-filter=ACMRD | grep -q "^$MIRROR_DEST"; then
+  "$REPO_ROOT/scripts/check-docs-mirror.sh"
+fi

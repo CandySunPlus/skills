@@ -1,0 +1,37 @@
+name: docs-mirror
+
+# 镜像目录是 Obsidian 的只读副本。pre-commit hook 不随 clone 分发，
+# 所以这里兜底：任何触及镜像的改动都必须与基线一致，也就是必须来自
+# sync-docs.sh，而不是手工编辑。
+#
+# 装的时候把下面所有 MIRROR_DEST 占位符换成 .mirror.conf 里的实际值，替换完
+# 连这段说明一起删掉。GitHub Actions 的 paths 读不了配置文件，只能手工对齐。
+# 触发条件按「哪些输入能改变校验结果」列：镜像、基线、以及三个脚本本身。
+on:
+  push:
+    paths:
+      - 'MIRROR_DEST/**'
+      - 'MIRROR_DEST.manifest'
+      - '.mirror.conf'
+      - 'scripts/check-docs-mirror.sh'
+      - 'scripts/mirror-common.sh'
+      - 'scripts/rewrite_wikilinks.py'
+      - 'scripts/sync-docs.sh'
+  pull_request:
+    paths:
+      - 'MIRROR_DEST/**'
+      - 'MIRROR_DEST.manifest'
+      - '.mirror.conf'
+      - 'scripts/check-docs-mirror.sh'
+      - 'scripts/mirror-common.sh'
+      - 'scripts/rewrite_wikilinks.py'
+      - 'scripts/sync-docs.sh'
+
+jobs:
+  # PR 上显示的检查名取自这里的 job 名（verify），不是上面的 name。
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: 校验镜像与同步基线一致
+        run: ./scripts/check-docs-mirror.sh
