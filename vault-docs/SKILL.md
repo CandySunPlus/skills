@@ -1,6 +1,6 @@
 ---
 name: vault-docs
-description: Use when 要读或改由 Obsidian vault 单向同步进仓库的只读镜像文档、拿不准文档该怎么写（术语、要不要交代变更由来、一条规则该写在哪篇）、处理 vault 里留下的 ==高亮== 加脚注批注、sync-docs.sh 或 check-docs-mirror.sh 报错或行为可疑、要把这套镜像机制装到一个新仓库、或任务收尾要沉淀工程经验与遗留清单
+description: Use when 要读或改由 Obsidian vault 单向同步进仓库的只读镜像文档、拿不准文档该怎么写（术语、要不要交代变更由来、一条规则该写在哪篇）、处理 vault 里留下的 ==高亮== 加脚注批注、sync-docs.sh 或 check-docs-mirror.sh 报错或行为可疑、要把这套镜像机制装到一个新仓库、要把已装好的仓库里的镜像脚本升级到 skill 的当前版本（「更新/升级 vault-docs 脚本」「同步 skill 的改动过来」）、或任务收尾要沉淀工程经验与遗留清单
 ---
 
 # vault-docs
@@ -8,6 +8,7 @@ description: Use when 要读或改由 Obsidian vault 单向同步进仓库的只
 让 Obsidian vault 当文档的唯一编辑入口、仓库里只放**只读镜像**的一套机制，外加走这条路时几个**校验查不出来**的坑。
 
 - 装到新仓库：`安装.md`
+- 已装好的仓库跟上 skill 的当前版本：`升级.md`（脚本是复制进去的，不会自己跟上）
 - 脚本：`scripts/`（四个文件一组，装在仓库根的一级子目录下）
 - 模板：`templates/`（配置、横幅、hook、CI、gitattributes）
 
