@@ -1,0 +1,4 @@
+interface:
+  display_name: "Obsidian 项目文档结构化"
+  short_description: "将指定目录整理为单一职责的 Obsidian 项目文档"
+  default_prompt: "使用 $structure-obsidian-docs 将指定源目录整理成 Obsidian 项目文档，并保持源文件不变。"
