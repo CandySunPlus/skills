@@ -127,7 +127,8 @@ def resolve_wikilink(vault: Path, raw: str) -> bool:
     if not target:
         return True
     candidate = vault / target
-    if candidate.exists() or candidate.with_suffix(".md").exists():
+    markdown_candidate = Path(str(candidate) + ".md")
+    if candidate.exists() or markdown_candidate.exists():
         return True
     if "/" not in target:
         matches = list(vault.rglob(target + ".md"))
