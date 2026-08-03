@@ -123,7 +123,7 @@ def frontmatter_properties(text: str) -> tuple[set[str], str | None]:
 
 
 def resolve_wikilink(vault: Path, raw: str) -> bool:
-    target = raw.split("|", 1)[0].split("#", 1)[0].strip()
+    target = wikilink_target(raw)
     if not target:
         return True
     candidate = vault / target
@@ -135,8 +135,19 @@ def resolve_wikilink(vault: Path, raw: str) -> bool:
     return False
 
 
-def validate_note(vault: Path, note: Path, forbid_local_links: bool) -> list[str]:
+def wikilink_target(raw: str) -> str:
+    target = raw.split("|", 1)[0].removesuffix("\\")
+    return target.split("#", 1)[0].strip()
+
+
+def validate_note(
+    vault: Path,
+    note: Path,
+    forbid_local_links: bool,
+    source_link_prefixes: tuple[str, ...],
+) -> list[str]:
     text = note.read_text(encoding="utf-8")
+    lines = text.splitlines()
     errors: list[str] = []
     _, frontmatter_error = frontmatter_properties(text)
     if frontmatter_error:
@@ -151,11 +162,35 @@ def validate_note(vault: Path, note: Path, forbid_local_links: bool) -> list[str
     if forbid_local_links:
         for target in LOCAL_MD_LINK_RE.findall(text):
             errors.append(f"local Markdown link must be a WikiLink: {target}")
-    for line_number, line in enumerate(text.splitlines(), start=1):
+    source_heading_lines = [
+        line_number
+        for line_number, line in enumerate(lines, start=1)
+        if line == "## 来源"
+    ]
+    source_heading_line = source_heading_lines[0] if source_heading_lines else None
+    if len(source_heading_lines) > 1:
+        errors.append("multiple ## 来源 sections")
+    if source_heading_line is not None:
+        for line_number, line in enumerate(lines[source_heading_line:], start=source_heading_line + 1):
+            if line.startswith("## "):
+                errors.append(f"line {line_number}: ## 来源 must be the final H2 section")
+                break
+
+    for line_number, line in enumerate(lines, start=1):
         if line.startswith("|") and re.search(r"\[\[[^\]]*(?<!\\)\|[^\]]+\]\]", line):
             errors.append(f"line {line_number}: unescaped WikiLink alias pipe inside table")
         if line.rstrip() != line:
             errors.append(f"line {line_number}: trailing whitespace")
+        for raw in WIKILINK_RE.findall(line):
+            target = wikilink_target(raw)
+            is_source_link = any(
+                target == prefix or target.startswith(prefix + "/")
+                for prefix in source_link_prefixes
+            )
+            if is_source_link and (source_heading_line is None or line_number <= source_heading_line):
+                errors.append(
+                    f"line {line_number}: source WikiLink must appear only under final ## 来源: [[{raw}]]"
+                )
     return errors
 
 
@@ -165,16 +200,27 @@ def validate(args: argparse.Namespace) -> int:
     manifest_path = Path(args.manifest).resolve()
     manifest = load_manifest(manifest_path)
     errors = verify_sources(manifest)
+    source_link_prefixes: list[str] = []
 
     for source_value in manifest["sources"]:
-        if overlaps(target, Path(source_value)):
+        source_path = Path(source_value)
+        if overlaps(target, source_path):
             errors.append(f"target overlaps source: {source_value}")
+        try:
+            source_link_prefixes.append(source_path.absolute().relative_to(vault).as_posix())
+        except ValueError:
+            pass
 
     notes = sorted(target.rglob("*.md")) if target.is_dir() else []
     if not notes:
         errors.append(f"target contains no Markdown notes: {target}")
     for note in notes:
-        for error in validate_note(vault, note, args.forbid_local_markdown_links):
+        for error in validate_note(
+            vault,
+            note,
+            args.forbid_local_markdown_links,
+            tuple(source_link_prefixes),
+        ):
             errors.append(f"{note.relative_to(target)}: {error}")
 
     if errors:

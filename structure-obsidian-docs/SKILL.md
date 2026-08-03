@@ -72,6 +72,8 @@ Create the smallest useful set. A typical project uses:
 
 Adapt names and count to the corpus. Do not split merely for symmetry. Give each note a “负责/不负责” statement. Define a fact once in its owner note; elsewhere use a WikiLink.
 
+Keep every synthesized note body self-contained. Do not cite, link, or name source documents in the body; use only target-note WikiLinks for navigation and ownership. Collect source-document WikiLinks exclusively in a final `## 来源` section.
+
 ### 4. Write with native Obsidian syntax
 
 First inspect `.obsidian/core-plugins.json` and `.obsidian/community-plugins.json`. Use only installed features. Do not emit Dataview queries unless Dataview is installed.
@@ -104,6 +106,7 @@ Use these conventions:
 - Obsidian tasks (`- [ ]`) for unresolved work; do not encode pending work only in tables.
 - Built-in `query` blocks only when core Search is enabled and the query is stable.
 - Escape WikiLink alias pipes as `\|` inside Markdown tables, or keep aliased links out of tables.
+- Keep source-document citations out of the body. Put every source link only under the final `## 来源` heading; do not use a source link as inline evidence, navigation, or contract ownership.
 
 Requirements describe “what”; technical notes describe “how”; acceptance notes describe “how to prove it.” Keep exact OpenAPI/Schema fields in their contract source rather than duplicating them into architecture notes.
 
@@ -125,6 +128,7 @@ Fix every error. Then verify:
 - Git shows no new source-directory modifications;
 - every note has valid Properties and a responsibility Callout;
 - every WikiLink resolves, code fences balance, and local links use WikiLink syntax;
+- no source-document citation or source link appears before the final `## 来源` section;
 - requirements have stable IDs and acceptance coverage;
 - recommendations carry an “as of” date and open items remain visibly unresolved.
 
