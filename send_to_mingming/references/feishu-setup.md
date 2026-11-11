@@ -1,22 +1,21 @@
-# 飞书 SDK 首次配置
+# 飞书外部群首次配置
 
-1. 在[飞书开放平台](https://open.feishu.cn/app)准备一个企业自建应用，启用机器人能力。将发信账号纳入应用的可用范围，在权限管理中开通以下**用户身份**权限并发布应用版本。可用权限和审批取决于组织设置。
+1. 在[飞书开放平台](https://open.feishu.cn/app)打开企业自建应用「访谈问题转发」，启用机器人能力。在「权限管理」开通以下**应用身份**权限。
 
-   - `im:message` 用于消息读写。
-   - `im:message.send_as_user` 用于以授权账号发送消息。
-   - `im:message.p2p_msg:get_as_user` 用于以授权账号读取单聊。
+   - `im:message` 用于发送和读取消息。
+   - `im:message.group_msg` 用于读取机器人所在群的历史消息。飞书可能要求企业管理员审批。
+   - `im:chat.members:read` 用于绑定时在目标群内核对时明明的成员身份。
 
-2. 在应用的「安全设置」中添加重定向 URL `https://127.0.0.1`。在[飞书 API 调试台](https://open.feishu.cn/api-explorer)选择同一个自建应用，在支持选择 `open_id` 的用户字段中，通过组织架构核对并复制时明明的 `open_id`。不同应用的 `open_id` 各自独立。
-3. 在本机终端进入此技能目录，运行以下命令，将占位符换成刚核对的 ID。
+2. 在「版本管理与发布」创建版本，在「对外共享」勾选「允许机器人被添加到外部群中使用」，并提交发布。应用可用范围应包含负责加机器人的企业成员。开启对外共享可能需要企业认证或个人实名认证。
+3. 由群主创建与时明明的外部群，在「群设置 → 群机器人 → 添加机器人」选择应用机器人「访谈问题转发」。从群设置复制以 `oc_` 开头的群 ID。
+4. 在本机终端进入此技能目录，执行以下命令。把占位符换成目标群 ID，再按提示输入同一个应用的 App ID 和 App Secret。
 
    ```bash
-   uv run --script scripts/feishu.py auth --recipient-open-id ou_xxx
+   uv run --script scripts/feishu.py configure --chat-id oc_xxx
    ```
 
-   在终端输入 App ID 和 App Secret。用自己的飞书账号打开脚本给出的授权链接。授权后浏览器会跳到本地地址，即使页面显示无法连接，也可以将地址栏中的完整 URL 粘贴回终端。用本机终端输入凭证。
+   脚本从群成员列表里按显示名「时明明」定位收件人，并检查机器人能否读该群历史。如果她在群里显示为其他名字，先核对身份，再给命令添加 `--respondent-name "实际显示名"`。配置保存在 `~/.config/send_to_mingming/bot.json`，文件权限为 `0600`，可用 `XDG_CONFIG_HOME` 指定配置根目录。
 
-脚本将凭证保存在 `~/.config/send_to_mingming/credentials.json`（设置了 `XDG_CONFIG_HOME` 时使用该目录），文件权限为 `0600`。授权包含 `offline_access`，脚本会在使用时自动续期。若续期凭证失效，重新运行 `auth`。
+发送回执关联到本批问题。时明明在群里引用原消息并按题号回复时，可以用引用关系区分不同批次。读取按需发生，使用机器人所在的固定群及批次时间范围。
 
-发送成功后用 JSON 回执里的 `chat_id` 和 `sent_at_ms` 读取当批消息之后的回复。通过 `parent_id` 或 `root_id` 可以识别引用原消息的回复。普通私信仍需根据内容判断属于哪一题。
-
-[Python SDK](https://github.com/larksuite/oapi-sdk-python) · [发送消息](https://open.feishu.cn/document/server-docs/im-v1/message/create) · [获取单聊历史](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/list) · [飞书用户授权说明](https://aily.feishu.cn/hc/8qluoxsa_xdqbv95g)
+[机器人对外共享](https://open.feishu.cn/document/develop-robots/add-bot-to-external-group?lang=zh-CN) · [获取会话历史](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/list) · [飞书 Python SDK](https://github.com/larksuite/oapi-sdk-python)
