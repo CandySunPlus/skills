@@ -134,12 +134,15 @@ def configure(chat_id, respondent_name):
     })
 
 
-def send(message_api, chat_id, message, request_id):
+def send(message_api, chat_id, recipient_open_id, message, request_id):
+    if not re.fullmatch(r"ou_[a-zA-Z0-9]+", recipient_open_id):
+        raise ValueError("收件人的飞书 Open ID 无效，请重新绑定外部群")
+    text = f'<at user_id="{recipient_open_id}">时明明</at>\n{message}'
     body = (
         CreateMessageRequestBody.builder()
         .receive_id(chat_id)
         .msg_type("text")
-        .content(json.dumps({"text": message}, ensure_ascii=False))
+        .content(json.dumps({"text": text}, ensure_ascii=False))
         .uuid(str(request_id))
         .build()
     )
@@ -210,7 +213,7 @@ def main():
         message = sys.stdin.read()
         if not message.strip():
             raise ValueError("请通过标准输入提供群消息正文")
-        result = send(message_api, chat_id, message, args.uuid)
+        result = send(message_api, chat_id, config["respondent_open_id"], message, args.uuid)
     else:
         result = read_replies(message_api, config["respondent_open_id"], chat_id, args.after_ms)
     print(json.dumps(result, ensure_ascii=False))
