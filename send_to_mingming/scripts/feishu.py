@@ -20,6 +20,7 @@ from lark_oapi.api.im.v1 import (
     CreateMessageRequest,
     CreateMessageRequestBody,
     GetChatMembersRequest,
+    GetMessageRequest,
     ListMessageRequest,
 )
 
@@ -81,15 +82,20 @@ def pages(fetch):
         seen.add(page_token)
 
 
-def find_respondent(chat_members_api, chat_id, name):
+def chat_members(chat_members_api, chat_id):
     def fetch(page_token):
         builder = GetChatMembersRequest.builder().chat_id(chat_id).member_id_type("open_id").page_size(50)
         if page_token:
             builder.page_token(page_token)
         return chat_members_api.get(builder.build())
 
+    for page in pages(fetch):
+        yield from page.items or []
+
+
+def find_respondent(chat_members_api, chat_id, name):
     matches = {
-        member.member_id for page in pages(fetch) for member in (page.items or [])
+        member.member_id for member in chat_members(chat_members_api, chat_id)
         if member.name == name and member.member_id and member.member_id.startswith("ou_")
     }
     if len(matches) != 1:
@@ -134,9 +140,30 @@ def configure(chat_id, respondent_name):
     })
 
 
-def send(message_api, chat_id, recipient_open_id, message, request_id):
+def read_mention_status(message_api, chat_id, message_id, recipient_open_id):
+    request = GetMessageRequest.builder().message_id(message_id).user_id_type("open_id").build()
+    try:
+        data = require_success(message_api.get(request))
+    except (requests.RequestException, ValueError):
+        return "unverified"
+
+    for item in data.items or []:
+        if item.message_id == message_id and item.chat_id == chat_id and not item.deleted:
+            return (
+                "verified"
+                if any(mention.id == recipient_open_id for mention in item.mentions or [])
+                else "missing"
+            )
+    return "unverified"
+
+
+def send(client, chat_id, recipient_open_id, message, request_id):
     if not re.fullmatch(r"ou_[a-zA-Z0-9]+", recipient_open_id):
         raise ValueError("收件人的飞书 Open ID 无效，请重新绑定外部群")
+    if not any(
+        member.member_id == recipient_open_id for member in chat_members(client.chat_members, chat_id)
+    ):
+        raise ValueError("绑定的飞书 Open ID 已不在当前群成员列表，请核对收件人后重新绑定")
     text = f'<at user_id="{recipient_open_id}">时明明</at>\n{message}'
     body = (
         CreateMessageRequestBody.builder()
@@ -148,16 +175,18 @@ def send(message_api, chat_id, recipient_open_id, message, request_id):
     )
     request = CreateMessageRequest.builder().receive_id_type("chat_id").request_body(body).build()
     try:
-        response = message_api.create(request)
+        response = client.message.create(request)
     except (requests.RequestException, ValueError) as error:
         raise ValueError("发送结果待核对，请先查看目标群") from error
     data = require_success(response)
     if not (data.message_id and data.chat_id == chat_id and data.create_time):
         raise ValueError("飞书未返回完整发送回执，请先查看目标群")
+    mention_status = read_mention_status(client.message, chat_id, data.message_id, recipient_open_id)
     return {
         "message_id": data.message_id,
         "chat_id": data.chat_id,
         "sent_at_ms": int(data.create_time),
+        "mention_status": mention_status,
     }
 
 
@@ -208,14 +237,14 @@ def main():
     chat_id = config["chat_id"]
     if args.command == "replies" and (args.chat_id != chat_id or args.after_ms <= 0):
         raise ValueError("请使用当前绑定群的发送回执里的 chat_id 和 sent_at_ms")
-    message_api = build_client(config["app_id"], config["app_secret"]).message
+    client = build_client(config["app_id"], config["app_secret"])
     if args.command == "send":
         message = sys.stdin.read()
         if not message.strip():
             raise ValueError("请通过标准输入提供群消息正文")
-        result = send(message_api, chat_id, config["respondent_open_id"], message, args.uuid)
+        result = send(client, chat_id, config["respondent_open_id"], message, args.uuid)
     else:
-        result = read_replies(message_api, config["respondent_open_id"], chat_id, args.after_ms)
+        result = read_replies(client.message, config["respondent_open_id"], chat_id, args.after_ms)
     print(json.dumps(result, ensure_ascii=False))
 
 

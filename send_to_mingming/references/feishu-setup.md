@@ -4,7 +4,7 @@
 
    - `im:message` 用于发送和读取消息。
    - `im:message.group_msg` 用于读取机器人所在群的历史消息。飞书可能要求企业管理员审批。
-   - `im:chat.members:read` 用于绑定时在目标群内核对时明明的成员身份。
+   - `im:chat.members:read` 用于绑定群成员和发送前核对绑定的 Open ID。
 
 2. 在「版本管理与发布」创建版本，在「对外共享」勾选「允许机器人被添加到外部群中使用」，并提交发布。应用可用范围应包含负责加机器人的企业成员。开启对外共享可能需要企业认证或个人实名认证。
 3. 由群主创建与时明明的外部群，在飞书桌面端或移动端通过「群设置 → 群机器人 → 添加机器人」选中该应用机器人。从群设置复制以 `oc_` 开头的会话 ID。
@@ -18,4 +18,4 @@
 
 发送回执关联到本批问题。时明明在群里引用原消息并按题号回复时，可以用引用关系区分不同批次。读取按需发生，使用机器人所在的固定群及批次时间范围。
 
-[机器人对外共享](https://open.feishu.cn/document/develop-robots/add-bot-to-external-group?lang=zh-CN) · [获取会话历史](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/list) · [飞书 Python SDK](https://github.com/larksuite/oapi-sdk-python)
+[机器人对外共享](https://open.feishu.cn/document/develop-robots/add-bot-to-external-group?lang=zh-CN) · [飞书文本消息提及语法](https://open.feishu.cn/document/server-docs/im-v1/message-content-description/create_json?lang=zh-CN) · [获取会话历史](https://open.feishu.cn/document/uAjLw4CM/ukTMukTMukTM/reference/im-v1/message/list) · [飞书 Python SDK](https://github.com/larksuite/oapi-sdk-python)
